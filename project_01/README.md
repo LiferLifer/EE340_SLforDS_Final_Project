@@ -74,6 +74,8 @@
   - **研发支出占GDP的比例**（0.54）：较高的研发投资可能与医疗和技术创新相关，这些都有助于提高生命质量和预期寿命。
   - **收入中最低20%的收入份额**（0.37）：这表明经济平等程度较高的国家可能有更高的生命预期。
 
+在以上分析中，有缺失值的样本对在计算中被忽略了。
+
 接下来进行寿命预期分布的特征分析：
 
 ![image-20240527013303728](./assets/image-20240527013303728.png)
@@ -495,8 +497,8 @@ Prevalence of underweight, weight for age (% of children under 5)    184
 
 ![image-20240529000446551](./assets/image-20240529000446551.png)
 
-- $MSE$：27.26；
-- $R^2$​：0.52。
+- $MSE$：27.26
+- $R^2$​：0.52
 
 同时，我们测试了仅使用中位数填充的方法，逐步向前选择模型的效果稍差于上述模型，证明了偏度插补有一定的优化效果。
 
@@ -512,6 +514,8 @@ Prevalence of underweight, weight for age (% of children under 5)    184
 #### Part e
 
 首先，测试使用 ARIMA 模型为每个特征使用每年全球均值，来预测 2024 年的特征全球均值：
+
+![image-20240529045238277](./assets/image-20240529045238277.png)
 
 ```python
 {'Agriculture, forestry, and fishing, value added (% of GDP)': 9.70904557622477,
@@ -612,7 +616,7 @@ USA 测试结果如下所示：
  'Research and development expenditure (% of GDP)': 3.193668350903618,
  'School enrollment, secondary (% net)': 94.31543956631843}
  
- # [+] Predicted Life Expectancy for the USA in 2024: 74.45230375409596
+[+] Predicted Life Expectancy for the USA in 2024: 74.45230375409596
 ```
 
 对于其他国家，我们可以应用这种方法进行类似的处理。
