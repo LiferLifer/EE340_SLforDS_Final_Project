@@ -133,6 +133,10 @@ Prevalence of underweight, weight for age (% of children under 5)    184
   'Life expectancy at birth, total (years)': 'mean'}
 ```
 
+经过相应的数据处理后，再次绘制相关性矩阵：
+
+![image-20240529010422153](./assets/image-20240529010422153.png)
+
 #### Part b
 
 在模型构建任务中，我们尝试了适用于该任务的数种可行的模型，下面是针对每一种模型的具体分析：
@@ -496,5 +500,119 @@ Prevalence of underweight, weight for age (% of children under 5)    184
 
 同时，我们测试了仅使用中位数填充的方法，逐步向前选择模型的效果稍差于上述模型，证明了偏度插补有一定的优化效果。
 
+接着，我们尝试添加两个新的指标：
 
+1. **研发支出占GDP的比重乘以GDP总量**：这一指标综合了研发投资相对规模和绝对规模的影响。
+2. **农业、林业和渔业增加值占GDP的百分比乘以GDP总量**：该指标同样将该行业对GDP的相对贡献与整体GDP规模结合起来，以提供更全面的指标。
 
+经过测试，我们发现，与研发支出和农业增加值乘以 GDP 相关的新特征具有较高的 p 值（分别为 0.921 和 0.427），表明在存在其他变量的情况下，它们不是统计上显著的预测因子。同时，结果并没有得到较大的改善。
+
+最后，我们尝试使用 Stacking 集成表现较好的模型，发现相对于梯度提升模型改善不大 。`{'MSE': 22.49936917320978, 'R2': 0.6070467392389411}`
+
+#### Part e
+
+首先，测试使用 ARIMA 模型为每个特征使用每年全球均值，来预测 2024 年的特征全球均值：
+
+```python
+{'Agriculture, forestry, and fishing, value added (% of GDP)': 9.70904557622477,
+ 'Annual freshwater withdrawals, total (% of internal resources)': 127.90736954292113,
+ 'Current health expenditure (% of GDP)': 6.431269395675334,
+ 'Forest area (% of land area)': 31.51066325514962,
+ 'GDP (current US$)': 423044275280.98785,
+ 'Immunization, measles (% of children ages 12-23 months)': 87.26246602053227,
+ 'Income share held by lowest 20%': 7.05005449282206,
+ 'Industry (including construction), value added (% of GDP)': 25.70417844407797,
+ 'Population, total': 39068493.48112622,
+ 'Prevalence of underweight, weight for age (% of children under 5)': 13.231325557515934,
+ 'Research and development expenditure (% of GDP)': 1.0132775165796215,
+ 'School enrollment, secondary (% net)': 72.99782540973887}
+```
+
+然后，使用训练好的 **Gradient Boosting** 模型预测 2024 年的预期寿命全球均值：
+
+```python
+[+] Predicted Global Life Expectancy for 2024: 75.25843842766987
+```
+
+测试完毕后，我们单独抽离每个国家的数据，分别预测 2024 年的预期寿命。例如，阿富汗的特征预测如下：
+
+```python
+{'Agriculture, forestry, and fishing, value added (% of GDP)': 24.295929434490677,
+ 'Annual freshwater withdrawals, total (% of internal resources)': 43.01590668080594,
+ 'Current health expenditure (% of GDP)': 18.577392279867563,
+ 'Forest area (% of land area)': 1.852781994081842,
+ 'GDP (current US$)': 17525621088.749435,
+ 'Immunization, measles (% of children ages 12-23 months)': 72.24082574959539,
+ 'Income share held by lowest 20%': 0.0,
+ 'Industry (including construction), value added (% of GDP)': 13.026197090015543,
+ 'Population, total': 42821080.59846224,
+ 'Prevalence of underweight, weight for age (% of children under 5)': 18.60169812740854,
+ 'Research and development expenditure (% of GDP)': 0.0,
+ 'School enrollment, secondary (% net)': 56.861998744214965}
+```
+
+阿富汗 2024 年的预期寿命预测为：
+
+```python
+[+] Predicted Life Expectancy for Afghanistan in 2024: 58.59048994742795
+```
+
+由于阿富汗在两个特征中数据缺失较多，预测结果不一定准确，接着我们抽象出这种方法，对 USA 进行测试：
+
+```python
+def forecast_country_features(country_data, features_to_forecast, forecast_years=6):
+    """
+    Forecast the specified features for a given country's time series data up to a number of additional years.
+    
+    Parameters:
+    - country_data (dict): A dictionary where keys are features and values are lists of historical data.
+    - features_to_forecast (list): A list of feature names to forecast.
+    - forecast_years (int): Number of years to forecast into the future.
+    
+    Returns:
+    - dict: A dictionary containing the forecasted values for each feature for the last forecast year.
+    """
+    forecasts = {}
+    for feature in features_to_forecast:
+        if feature in country_data and len(country_data[feature]) > 2:
+            # Fill missing values using forward-fill first, then back-fill
+            values = pd.Series(country_data[feature])
+            filled_values = values.ffill().bfill()
+
+            # Build and fit ARIMA model if sufficient data
+            try:
+                model = ARIMA(filled_values, order=(1,1,1))
+                model_fit = model.fit()
+                # Forecast up to the specified forecast year
+                forecast_result = model_fit.get_forecast(steps=forecast_years)
+                forecasts[feature] = forecast_result.predicted_mean.iloc[-1]
+            except Exception as e:
+                forecasts[feature] = None
+                print(f"Error forecasting {feature}: {str(e)}")
+        else:
+            forecasts[feature] = None
+            print(f"Not enough data to forecast {feature}")
+
+    return forecasts
+```
+
+USA 测试结果如下所示：
+
+```python
+{'Agriculture, forestry, and fishing, value added (% of GDP)': 0.9060956964112822,
+ 'Annual freshwater withdrawals, total (% of internal resources)': 15.758834105052925,
+ 'Current health expenditure (% of GDP)': 16.65657708458864,
+ 'Forest area (% of land area)': 33.92044327169513,
+ 'GDP (current US$)': 20533082985719.812,
+ 'Immunization, measles (% of children ages 12-23 months)': 91.6405371872185,
+ 'Income share held by lowest 20%': 5.230430219850322,
+ 'Industry (including construction), value added (% of GDP)': 18.629626514011125,
+ 'Population, total': 337558174.9505023,
+ 'Prevalence of underweight, weight for age (% of children under 5)': 0.39999400231416793,
+ 'Research and development expenditure (% of GDP)': 3.193668350903618,
+ 'School enrollment, secondary (% net)': 94.31543956631843}
+ 
+ # [+] Predicted Life Expectancy for the USA in 2024: 74.45230375409596
+```
+
+对于其他国家，我们可以应用这种方法进行类似的处理。
